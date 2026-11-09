@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>TAB譜メーカー</title>
 <meta name="description" content="ブラウザで使えるギターTAB譜エディタ。リズム表示・チューニング設定・デモ再生・PDF出力に対応。">
-<link rel="stylesheet" href="style.css">
+<!-- 更新時は ?v= の番号を上げる（ブラウザに古いファイルを使わせないため） -->
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 <header class="ui">
@@ -15,6 +16,7 @@
       <button class="primary" id="btnPlay">▶ 再生</button>
       <button id="btnPlaySel">▶ 選択した小節から</button>
       <label>テンポ ♩=<input type="number" id="inTempo" min="30" max="300"></label>
+      <label>音色<select id="inTone"><option value="clean">クリーン</option><option value="dist">ディストーション（歪み）</option></select></label>
       <label><input type="checkbox" id="chkLoop">ループ</label>
       <label><input type="checkbox" id="chkMetro">メトロノーム</label>
     </div>
@@ -48,13 +50,19 @@
     </div>
     <div class="grp" role="group" aria-label="奏法">
       <span class="cap">奏法</span>
-      <button class="tool" data-k="h" title="ハンマリング・オン">h</button>
-      <button class="tool" data-k="p" title="プリング・オフ">p</button>
-      <button class="tool" data-k="/" title="スライド（上）">/</button>
-      <button class="tool" data-k="\" title="スライド（下）">\</button>
-      <button class="tool" data-k="b" title="チョーキング（全音）">b</button>
-      <button class="tool" data-k="~" title="ビブラート">~</button>
-      <button class="tool" data-k="x" title="ブラッシング（ミュート音）">x</button>
+      <button class="tool" data-k="h" title="ハンマリング・オン（hキー）">h</button>
+      <button class="tool" data-k="p" title="プリング・オフ（pキー）">p</button>
+      <button class="tool" data-k="/" title="スライド上：次の音へ／次がなければ上へ抜ける（/キー）">/</button>
+      <button class="tool" data-k="\" title="スライド下：次の音へ／次がなければ下へ滑り落ちる（\キー）">\</button>
+      <button class="tool" data-k="si" title="スライドイン：下から滑り込む">/入</button>
+      <button class="tool" data-k="u" title="チョーキング 半音（uキー）">ﾁｮｰｷﾝｸﾞ½</button>
+      <button class="tool" data-k="b" title="チョーキング 全音（bキー）">ﾁｮｰｷﾝｸﾞ</button>
+      <button class="tool" data-k="r" title="チョーキングの戻し（チョーキングなしならプリベンド＆リリース）">戻し</button>
+      <button class="tool" data-k="~" title="ビブラート（~キー）。チョーキングと同時に付けられます">~</button>
+      <button class="tool" data-k="w" title="アーム・ダウン（wキー）">ｱｰﾑ</button>
+      <button class="tool" data-k="a" title="ピッキング・ハーモニクス（aキー）">P.H.</button>
+      <button class="tool" data-k="ps" title="ピックスクラッチ（音符単位）">P.S.</button>
+      <button class="tool" data-k="x" title="ブラッシング（ミュート音・xキー）">x</button>
       <button class="tool" data-k="t" title="タイ（前の音をのばす・tキー）">タイ</button>
     </div>
     <div class="grp" role="group" aria-label="音符の操作">
@@ -83,6 +91,7 @@
   <ul>
     <li>譜面の線をクリックして弦と音符を選び、数字キーでフレット番号を入力します（12などは続けて2回押す）。</li>
     <li><kbd>←</kbd><kbd>→</kbd> で前後の音符へ、<kbd>↑</kbd><kbd>↓</kbd> で弦を移動。小節の最後で <kbd>→</kbd> を押すと、小節が埋まるまで音符が追加されます。</li>
+    <li>エレキの奏法：「ﾁｮｰｷﾝｸﾞ」＋「~」で上げてから揺らす「ぎゅい〜ん」、「P.H.」で高く鳴くハーモニクス、「ｱｰﾑ」で音程を下げるアームダウン、「P.S.」でピックスクラッチ。奏法は同じ音に重ねて付けられます。音色を「ディストーション」にするとエレキらしい音で確認できます。</li>
     <li><kbd>t</kbd>（または「タイ」ボタン）で、前の音をのばすタイ「(4)」になります。空いたマスで押すと、前の音と同じフレットでタイを作ります。</li>
     <li>音の長さはボタンで選択。<kbd>+</kbd>/<kbd>-</kbd> で長く/短く、<kbd>.</kbd> で付点、<kbd>r</kbd> で休符。</li>
     <li><kbd>Del</kbd> で選択中の弦のフレットを消去、<kbd>Shift</kbd>+<kbd>Del</kbd> で音符ごと削除、<kbd>Ins</kbd> で前に挿入。</li>
@@ -94,6 +103,6 @@
 
 <main class="paper" id="paper"></main>
 
-<script src="app.js"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>
