@@ -91,6 +91,7 @@ function normalize(o) {
   o.version = 2; o.tempo = Math.max(30, Math.min(300, +o.tempo || 100));
   o.beats = Math.max(2, Math.min(6, +o.beats || 4)); o.title = o.title || ''; o.artist = o.artist || '';
   o.tone = o.tone === 'dist' ? 'dist' : 'clean';
+  o.view = o.view === 'staff' ? 'staff' : 'tab';
   o.measures.forEach(m => m.forEach(e => {
     e.dot = !!e.dot; if (e.ps) e.ps = true; else delete e.ps;
     e.n = e.n.map(x => { const p = parseTok(String(x || '')); return p ? (p.x ? 'x' : fmtTok(p)) : ''; });
@@ -144,7 +145,7 @@ function buildTuneSel() {
 }
 function syncForm() {
   $('#inTitle').value = S.title; $('#inArtist').value = S.artist;
-  $('#inTempo').value = S.tempo; $('#inBeats').value = S.beats; $('#inTone').value = S.tone === 'dist' ? 'dist' : 'clean';
+  $('#inTempo').value = S.tempo; $('#inBeats').value = S.beats; $('#inTone').value = S.tone === 'dist' ? 'dist' : 'clean'; $('#inView').value = S.view === 'staff' ? 'staff' : 'tab';
   const p = presetOf(S.tuning); $('#inPreset').value = p ? p.id : 'custom';
   buildTuneSel();
 }
@@ -191,10 +192,28 @@ function render() {
   let html = `<div class="hd"><h1>${esc(S.title) || '無題'}</h1><div class="artist">${esc(S.artist)}</div>
     <div class="meta"><span><b>Tuning:</b> ${tt.name}（${tt.notes}）${tt.diff ? '　' + tt.diff : ''}</span><span>♩ = ${S.tempo}</span></div></div>`;
   lay = layout();
+  const view = S.view || 'tab', showStaff = view !== 'tab', showTab = view !== 'staff';
   lay.rows.forEach((r, ri) => {
-    let g = `<svg class="sys" data-row="${ri}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
-    g += `<rect class="pc" id="pc-${ri}" x="0" y="${TOP - LS / 2}" width="1" height="${H - TOP - 8}" style="display:none"/>`;
-    g += `<rect class="selc ed" id="sc-${ri}" x="0" y="${TOP - LS / 2}" width="1" height="${H - TOP - 8}" style="display:none"/>`;
+    const off = showStaff ? SH : 0, totalH = off + (showTab ? H : 0);
+    let g = `<svg class="sys" data-row="${ri}" viewBox="0 0 ${W} ${totalH}" xmlns="http://www.w3.org/2000/svg">`;
+    g += `<rect class="pc" id="pc-${ri}" x="0" y="14" width="1" height="${totalH - 26}" style="display:none"/>`;
+    g += `<rect class="selc ed" id="sc-${ri}" x="0" y="14" width="1" height="${totalH - 26}" style="display:none"/>`;
+    // 小節の過不足（編集画面のみ）
+    r.ms.forEach(mm => {
+      const diff = cap() - mTicks(S.measures[mm.mi]);
+      if (diff !== 0) g += `<text class="fill ed" x="${mm.x + mm.w / 2}" y="${totalH - 3}" fill="${diff > 0 ? '#b45309' : '#dc2626'}">${diff > 0 ? 'あと' + beatsText(diff) + '拍' : beatsText(-diff) + '拍オーバー'}</text>`;
+    });
+    if (showStaff) g += staffBlock(r, ri, !showTab);
+    if (showTab) g += `<g transform="translate(0 ${off})">` + tabBlock(r, ri, !showStaff) + '</g>';
+    html += g + '</svg>';
+  });
+  $('#paper').innerHTML = html;
+  updateSel(false);
+}
+
+/* TAB譜の1段ぶん（standalone=true なら小節番号とリズムも描く） */
+function tabBlock(r, ri, standalone) {
+    let g = '';
     for (let i = 0; i < 6; i++) {
       const y = TOP + i * LS;
       g += `<line class="sl" x1="${L}" y1="${y}" x2="${r.end}" y2="${y}"/><text class="lb" x="${L - 12}" y="${y}">${nn(S.tuning[i])}</text>`;
@@ -202,16 +221,13 @@ function render() {
     g += `<line class="bl" x1="${L}" y1="${TOP}" x2="${L}" y2="${YB}"/>`;
     r.ms.forEach(mm => {
       const m = S.measures[mm.mi], xe = mm.x + mm.w, last = mm.mi === S.measures.length - 1;
-      g += `<text class="nb" x="${mm.x + 3}" y="10">${mm.mi + 1}</text>`;
+      if (standalone) g += `<text class="nb" x="${mm.x + 3}" y="10">${mm.mi + 1}</text>`;
       if (last) g += `<line class="bl" x1="${xe - 5}" y1="${TOP}" x2="${xe - 5}" y2="${YB}"/><line x1="${xe - 1.5}" y1="${TOP}" x2="${xe - 1.5}" y2="${YB}" stroke="#111" stroke-width="3"/>`;
       else g += `<line class="bl" x1="${xe}" y1="${TOP}" x2="${xe}" y2="${YB}"/>`;
       if (mm.extra) {
         const cx = mm.x + 15;
         g += `<rect x="${cx - 9}" y="${TOP}" width="18" height="${YB - TOP}" fill="#fff"/><text class="ts" x="${cx}" y="${TOP + LS * 1.3}">${S.beats}</text><text class="ts" x="${cx}" y="${TOP + LS * 3.7}">4</text>`;
       }
-      // 小節の過不足（編集画面のみ）
-      const diff = cap() - mTicks(m);
-      if (diff !== 0) g += `<text class="fill ed" x="${mm.x + mm.w / 2}" y="${H - 3}" fill="${diff > 0 ? '#b45309' : '#dc2626'}">${diff > 0 ? 'あと' + beatsText(diff) + '拍' : beatsText(-diff) + '拍オーバー'}</text>`;
       m.forEach((e, ei) => {
         const p = mm.evs[ei];
         let ov = '';                                    // 数字の上に重ねる記号
@@ -254,13 +270,131 @@ function render() {
         g += ov;
         g += `<rect class="cell" data-m="${mm.mi}" data-e="${ei}" data-str="-1" x="${p.x0}" y="${YB + LS / 2}" width="${p.x1 - p.x0}" height="${H - YB - LS / 2}"/>`;
       });
-      g += rhythm(m, mm.evs);
+      if (standalone) g += rhythm(m, mm.evs);
     });
     g += `<rect class="selr ed" id="sr-${ri}" x="0" y="0" width="1" height="${LS}" style="display:none"/>`;
-    html += g + '</svg>';
+    return g;
+}
+
+/* ---------- 五線譜（ギター譜の慣習どおり、ト音記号＋8＝実音より1オクターブ高く記譜） ---------- */
+const SP = 8, ST = 46, SB = ST + 4 * SP, SH = SB + 50;   // 線の間隔・第5線・第1線・五線ブロックの高さ
+const LETTER = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6], SHARP = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0];
+function staffPos(midi) {                              // 記譜上の音 → 五線の段（E4 = 第1線 = 30）
+  const w = midi + 12, pc = ((w % 12) + 12) % 12;
+  const d = (Math.floor(w / 12) - 1) * 7 + LETTER[pc];
+  return { d, y: SB - (d - 30) * SP / 2, sharp: SHARP[pc] };
+}
+function evNotes(e) {                                  // 1つの音符に含まれる音（同じ高さはまとめる）
+  const out = [];
+  e.n.forEach((tok, i) => {
+    const p = parseTok(tok); if (!p) return;
+    const s = staffPos(S.tuning[i] + (p.x ? 0 : p.f));
+    const ex = out.find(o => o.d === s.d && o.sharp === s.sharp);
+    if (ex) { ex.tie = ex.tie && p.tie; return; }
+    out.push({ ...s, x: !!p.x, tie: !!p.tie, str: i, fl: p.x ? '' : p.fl });
   });
-  $('#paper').innerHTML = html;
-  updateSel(false);
+  return out.sort((a, b) => a.d - b.d);
+}
+const CLEF = (x, g) => `<path class="rh" stroke-width="1.7" d="M${x + 9} ${g + 3} C${x + 3} ${g + 4} ${x + 3} ${g - 5} ${x + 9} ${g - 5} C${x + 16} ${g - 5} ${x + 16} ${g + 6} ${x + 9} ${g + 7} C${x} ${g + 8} ${x - 1} ${g - 4} ${x + 5} ${g - 10} C${x + 10} ${g - 15} ${x + 14} ${g - 22} ${x + 11} ${g - 28} C${x + 8} ${g - 33} ${x + 4} ${g - 26} ${x + 7} ${g - 18} L${x + 11} ${g + 15} C${x + 12} ${g + 21} ${x + 6} ${g + 22} ${x + 5} ${g + 17}"/><circle class="rhf" cx="${x + 6.5}" cy="${g + 16}" r="2.2"/><text class="oc" x="${x + 9}" y="${g + 30}">8</text>`;
+
+function staffBlock(r, ri, standalone) {
+  let g = '';
+  for (let k = 0; k < 5; k++) { const y = ST + k * SP; g += `<line class="sl" x1="${L}" y1="${y}" x2="${r.end}" y2="${y}"/>`; }
+  g += CLEF(L - 26, SB - SP);
+  g += `<line class="bl" x1="${L}" y1="${ST}" x2="${L}" y2="${SB}"/>`;
+  r.ms.forEach(mm => {
+    const m = S.measures[mm.mi], xe = mm.x + mm.w, last = mm.mi === S.measures.length - 1;
+    g += `<text class="nb" x="${mm.x + 3}" y="10">${mm.mi + 1}</text>`;
+    if (last) g += `<line class="bl" x1="${xe - 5}" y1="${ST}" x2="${xe - 5}" y2="${SB}"/><line x1="${xe - 1.5}" y1="${ST}" x2="${xe - 1.5}" y2="${SB}" stroke="#111" stroke-width="3"/>`;
+    else g += `<line class="bl" x1="${xe}" y1="${ST}" x2="${xe}" y2="${SB}"/>`;
+    if (mm.extra) { const cx = mm.x + 15; g += `<text class="tss" x="${cx}" y="${ST + SP}">${S.beats}</text><text class="tss" x="${cx}" y="${ST + 3 * SP}">4</text>`; }
+
+    const acc = {};                                      // 小節内の臨時記号の状態
+    let t = 0;
+    const items = m.map((e, ei) => { const it = { e, ei, x: mm.evs[ei].nx, st: t, notes: evNotes(e) }; t += evTicks(e); return it; });
+    // 符尾の向き（連桁グループごと）
+    const groups = []; let cur = null;
+    items.forEach(it => {
+      const beamable = it.notes.length && it.e.d >= 8, beat = Math.floor(it.st / 16);
+      if (beamable && cur && cur.beat === beat) cur.list.push(it);
+      else { if (cur) groups.push(cur); cur = beamable ? { beat, list: [it] } : null; }
+      if (!beamable && it.notes.length) groups.push({ list: [it] });
+    });
+    if (cur) groups.push(cur);
+    groups.forEach(gr => {
+      const all = gr.list.flatMap(it => it.notes), avg = all.reduce((a, n) => a + n.d, 0) / all.length;
+      const up = avg < 34;
+      gr.list.forEach(it => { it.up = up; it.top = it.notes[it.notes.length - 1].y; it.bot = it.notes[0].y; });
+      const end = up ? Math.min(...gr.list.map(it => it.top - 3.5 * SP)) : Math.max(...gr.list.map(it => it.bot + 3.5 * SP));
+      gr.list.forEach(it => { it.end = gr.list.length > 1 ? end : (up ? it.top - 3.5 * SP : it.bot + 3.5 * SP); });
+      gr.up = up; gr.end = end;
+    });
+
+    items.forEach(it => {
+      const { e, x, ei } = it, p = mm.evs[ei];
+      g += `<rect class="cell" data-m="${mm.mi}" data-e="${ei}" data-str="-1" x="${p.x0}" y="${ST - 12}" width="${p.x1 - p.x0}" height="${SH - ST + 4}"/>`;
+      if (!it.notes.length) {                           // 休符
+        g += restGlyph(e.d, x, e.d === 1 ? ST + SP + 5 : ST + 2 * SP);
+        if (e.dot) g += `<circle class="rhf" cx="${x + 8}" cy="${ST + SP * 1.5}" r="1.7"/>`;
+        return;
+      }
+      const ann = [];
+      it.notes.forEach(n => {
+        // 加線
+        for (let k = 28; k >= n.d; k -= 2) { const y = SB - (k - 30) * SP / 2; g += `<line class="lg" x1="${x - 7}" y1="${y}" x2="${x + 7}" y2="${y}"/>`; }
+        for (let k = 40; k <= n.d; k += 2) { const y = SB - (k - 30) * SP / 2; g += `<line class="lg" x1="${x - 7}" y1="${y}" x2="${x + 7}" y2="${y}"/>`; }
+        // 臨時記号（タイの続きには付けない）
+        const st = acc[n.d] || 0;
+        if (n.sharp !== st && !n.tie) g += `<text class="acc" x="${x - 9}" y="${n.y}">${n.sharp ? '♯' : '♮'}</text>`;
+        acc[n.d] = n.sharp;
+        // 符頭
+        if (n.x) g += `<path class="rh" stroke-width="1.5" d="M${x - 3.5} ${n.y - 3.5} l7 7 M${x - 3.5} ${n.y + 3.5} l7 -7"/>`;
+        else if (e.d <= 2) g += `<ellipse cx="${x}" cy="${n.y}" rx="4.6" ry="3.3" transform="rotate(-20 ${x} ${n.y})" fill="#fff" stroke="#111" stroke-width="1.4"/>`;
+        else g += `<ellipse class="rhf" cx="${x}" cy="${n.y}" rx="4.6" ry="3.3" transform="rotate(-20 ${x} ${n.y})"/>`;
+        if (e.dot) g += `<circle class="rhf" cx="${x + 8}" cy="${n.d % 2 === 0 ? n.y - SP / 2 : n.y}" r="1.7"/>`;
+        // タイ（前の音から）
+        if (n.tie) {
+          const pp = prevPos(mm.mi, ei), pw = pp && lay.where[pp[0]];
+          const x0 = pw && pw.ri === ri ? pw.mm.evs[pp[1]].nx + 5 : mm.x - 2, x1 = x - 6, dy = it.up ? 6 : -6;
+          if (x1 > x0) g += `<path d="M${x0} ${n.y + dy * .6} Q${(x0 + x1) / 2} ${n.y + dy * 1.8} ${x1} ${n.y + dy * .6}" stroke="#111" stroke-width="1.1" fill="none"/>`;
+        }
+        if (standalone && n.fl) {                       // 五線譜だけのときは奏法を文字で
+          if (/a/.test(n.fl) && !ann.includes('P.H.')) ann.push('P.H.');
+          if (/w/.test(n.fl) && !ann.includes('w/bar')) ann.push('w/bar');
+          if (/b/.test(n.fl) && !ann.includes('full')) ann.push('full');
+          if (/u/.test(n.fl) && !ann.includes('½')) ann.push('½');
+          if (/~/.test(n.fl) && !ann.includes('~')) ann.push('~');
+        }
+      });
+      if (standalone && e.ps) ann.unshift('P.S.');
+      if (ann.length) g += `<text class="an" x="${x - 4}" y="${ST - 16}">${ann.join(' ')}</text>`;
+      // 符尾と旗
+      if (e.d >= 2) {
+        const sx = it.up ? x + 4.2 : x - 4.2, from = it.up ? it.bot : it.top;
+        g += `<line class="rh" x1="${sx}" y1="${from}" x2="${sx}" y2="${it.end}"/>`;
+      }
+    });
+    groups.forEach(gr => {
+      const Lg = gr.list; if (!Lg.length || Lg[0].e.d < 8) return;
+      const sx = it => it.up ? it.x + 4.2 : it.x - 4.2, dir = gr.up ? 1 : -1;
+      if (Lg.length === 1) {
+        const it = Lg[0], n = it.e.d === 16 ? 2 : 1;
+        for (let k = 0; k < n; k++) { const y = it.end + dir * k * 6; g += `<path class="rh" stroke-width="1.6" d="M${sx(it)} ${y} c1 ${4 * dir} 8 ${6 * dir} 6 ${13 * dir}"/>`; }
+        return;
+      }
+      const a = sx(Lg[0]), b = sx(Lg[Lg.length - 1]), y0 = gr.up ? gr.end : gr.end - 3.5;
+      g += `<rect class="rhf" x="${a - .6}" y="${y0}" width="${b - a + 1.2}" height="3.5"/>`;
+      for (let i = 0; i < Lg.length;) {                 // 16分の2本目
+        if (Lg[i].e.d !== 16) { i++; continue; }
+        let j = i; while (j + 1 < Lg.length && Lg[j + 1].e.d === 16) j++;
+        const y = y0 + dir * 6;
+        if (j > i) g += `<rect class="rhf" x="${sx(Lg[i]) - .6}" y="${y}" width="${sx(Lg[j]) - sx(Lg[i]) + 1.2}" height="3.5"/>`;
+        else { const left = i === Lg.length - 1; g += `<rect class="rhf" x="${left ? sx(Lg[i]) - 7 : sx(Lg[i])}" y="${y}" width="7" height="3.5"/>`; }
+        i = j + 1;
+      }
+    });
+  });
+  return g;
 }
 
 /* リズム（TAB譜の下の符尾・連桁・休符） */
@@ -321,10 +455,10 @@ function updateSel(scroll = true) {
   const w = lay.where[sel.m]; if (!w) return;
   const p = w.mm.evs[sel.e]; if (!p) return;
   const a = document.getElementById('sr-' + w.ri), b = document.getElementById('sc-' + w.ri);
-  a.setAttribute('x', p.x0); a.setAttribute('width', p.x1 - p.x0); a.setAttribute('y', TOP + sel.str * LS - LS / 2); a.style.display = '';
+  if (a) { a.setAttribute('x', p.x0); a.setAttribute('width', p.x1 - p.x0); a.setAttribute('y', TOP + sel.str * LS - LS / 2); a.style.display = ''; }  // 五線譜表示ではTABの枠はない
   b.setAttribute('x', p.x0); b.setAttribute('width', p.x1 - p.x0); b.style.display = '';
   lastSelRow = w.ri;
-  if (scroll) scrollIntoViewIfNeeded(a.ownerSVGElement);
+  if (scroll) scrollIntoViewIfNeeded(b.ownerSVGElement);
   // パレットの状態とステータス
   const e = curEv(); inDur = e.d; inDot = e.dot;
   document.querySelectorAll('.dur').forEach(btn => btn.classList.toggle('on', +btn.dataset.d === inDur));
@@ -472,6 +606,15 @@ $('#inTitle').addEventListener('input', ev => { S.title = ev.target.value; rende
 $('#inArtist').addEventListener('input', ev => { S.artist = ev.target.value; render(); save(); });
 $('#inTempo').addEventListener('change', ev => { pushUndo(); S.tempo = Math.max(30, Math.min(300, +ev.target.value || 100)); commit(); });
 $('#inBeats').addEventListener('change', ev => { pushUndo(); S.beats = +ev.target.value; commit(); });
+$('#inView').addEventListener('change', ev => { S.view = ev.target.value; render(); save(); ev.target.blur(); });
+function setTools(open) {                              // 入力ツールの開閉（開閉状態はこのブラウザだけに記憶）
+  $('#tools').hidden = !open;
+  $('#btnTools').setAttribute('aria-expanded', open);
+  $('#btnTools').textContent = open ? '入力ツール ▲' : '入力ツール ▼';
+  try { localStorage.setItem('tabMaker.toolsOpen', open ? '1' : '0'); } catch (e) {}
+}
+btn('#btnTools', () => setTools($('#tools').hidden));
+try { setTools(localStorage.getItem('tabMaker.toolsOpen') === '1'); } catch (e) { setTools(false); }
 $('#inTone').addEventListener('change', ev => { pushUndo(); S.tone = ev.target.value; save(); if (ctx) ensureAudio(); ev.target.blur(); });
 $('#inPreset').addEventListener('change', ev => {
   const p = PRESETS.find(x => x.id === ev.target.value); if (!p) { syncForm(); return; }

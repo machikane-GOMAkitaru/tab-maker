@@ -6,7 +6,7 @@
 <title>TAB譜メーカー</title>
 <meta name="description" content="ブラウザで使えるギターTAB譜エディタ。リズム表示・チューニング設定・デモ再生・PDF出力に対応。">
 <!-- 更新時は ?v= の番号を上げる（ブラウザに古いファイルを使わせないため） -->
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 <header class="ui">
@@ -21,14 +21,17 @@
       <label><input type="checkbox" id="chkMetro">メトロノーム</label>
     </div>
     <div class="grp right">
+      <label>表示<select id="inView"><option value="tab">TAB</option><option value="staff">五線譜</option></select></label>
       <button id="btnNew">新規</button>
       <button id="btnOpen">JSON読み込み</button>
       <button id="btnSave">JSON書き出し</button>
       <button id="btnPdf" class="primary">PDF出力</button>
+      <button id="btnTools" aria-expanded="false" aria-controls="tools">入力ツール ▼</button>
       <input type="file" id="file" accept=".json,application/json" hidden>
     </div>
   </div>
 
+  <div id="tools" hidden>
   <div class="bar">
     <label>曲名<input class="t" id="inTitle"></label>
     <label>アーティスト<input class="t" id="inArtist"></label>
@@ -84,11 +87,14 @@
     </div>
   </div>
   <div class="status" id="status" aria-live="polite"></div>
+  </div>
 </header>
 
 <details class="help">
   <summary>使い方</summary>
   <ul>
+    <li>曲名・チューニング・音の長さ・奏法などは「入力ツール ▼」を押すと出てきます。</li>
+    <li>「表示」で TAB と五線譜を切り替えられます（五線譜はギター譜の慣習どおり、ト音記号の下に8＝実音より1オクターブ高く書きます）。入力は TAB 表示で行ってください。</li>
     <li>譜面の線をクリックして弦と音符を選び、数字キーでフレット番号を入力します（12などは続けて2回押す）。</li>
     <li><kbd>←</kbd><kbd>→</kbd> で前後の音符へ、<kbd>↑</kbd><kbd>↓</kbd> で弦を移動。小節の最後で <kbd>→</kbd> を押すと、小節が埋まるまで音符が追加されます。</li>
     <li>エレキの奏法：「ﾁｮｰｷﾝｸﾞ」＋「~」で上げてから揺らす「ぎゅい〜ん」、「P.H.」で高く鳴くハーモニクス、「ｱｰﾑ」で音程を下げるアームダウン、「P.S.」でピックスクラッチ。奏法は同じ音に重ねて付けられます。音色を「ディストーション」にするとエレキらしい音で確認できます。</li>
@@ -103,6 +109,6 @@
 
 <main class="paper" id="paper"></main>
 
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>
