@@ -33,6 +33,8 @@ const isRest = e => e.n.every(x => !x);
 const mkEv = (d, dot) => ({ d, dot: !!dot, n: ['', '', '', '', '', ''] });
 const cap = () => S.beats * 16;
 const mTicks = m => m.reduce((a, e) => a + evTicks(e), 0);
+const TIE = /^\((\d+)\)$/;                                 // "(4)" = 前の音からのタイ
+const prevPos = (mi, ei) => ei > 0 ? [mi, ei - 1] : mi > 0 ? [mi - 1, S.measures[mi - 1].length - 1] : null;
 const beatsText = t => { const b = t / 16; return Number.isInteger(b) ? String(b) : b.toFixed(2).replace(/0+$/, ''); };
 
 let S;
@@ -68,7 +70,7 @@ function validSong(o) {
 function normalize(o) {
   o.version = 2; o.tempo = Math.max(30, Math.min(300, +o.tempo || 100));
   o.beats = Math.max(2, Math.min(6, +o.beats || 4)); o.title = o.title || ''; o.artist = o.artist || '';
-  o.measures.forEach(m => m.forEach(e => { e.dot = !!e.dot; e.n = e.n.map(x => String(x || '').replace(/[^0-9hpb~x\/\\]/g, '').slice(0, 4)); }));
+  o.measures.forEach(m => m.forEach(e => { e.dot = !!e.dot; e.n = e.n.map(x => String(x || '').replace(/[^0-9hpb~x\/\\()]/g, '').slice(0, 5)); }));
   return o;
 }
 function save() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); } catch (e) {} }
@@ -192,6 +194,11 @@ function render() {
           g += `<rect class="cell" data-m="${mm.mi}" data-e="${ei}" data-str="${i}" x="${p.x0}" y="${y - LS / 2}" width="${p.x1 - p.x0}" height="${LS}"/>`;
           const tok = e.n[i];
           if (tok) { const tw = tok.length * 7.2 + 3; g += `<rect x="${p.nx - tw / 2}" y="${y - 6.5}" width="${tw}" height="13" fill="#fff"/><text class="fr" x="${p.nx}" y="${y}">${esc(tok)}</text>`; }
+          if (TIE.test(tok)) {                          // タイの弧（前の音から／段の頭なら左端から）
+            const pp = prevPos(mm.mi, ei), pw = pp && lay.where[pp[0]];
+            const x0 = pw && pw.ri === ri ? pw.mm.evs[pp[1]].nx + 5 : mm.x - 2, x1 = p.nx - 9;
+            if (x1 > x0) g += `<path d="M${x0} ${y + 4} Q${(x0 + x1) / 2} ${y + 10} ${x1} ${y + 4}" stroke="#111" stroke-width="1" fill="none"/>`;
+          }
         }
         g += `<rect class="cell" data-m="${mm.mi}" data-e="${ei}" data-str="-1" x="${p.x0}" y="${YB + LS / 2}" width="${p.x1 - p.x0}" height="${H - YB - LS / 2}"/>`;
       });
@@ -304,7 +311,16 @@ function inputDigit(d) {
 }
 function inputTech(k) {
   const e = curEv(), cur = e.n[sel.str];
-  if (k === 'x') { pushUndo(); e.n[sel.str] = cur === 'x' ? '' : 'x'; }
+  if (k === 't') {
+    const t = cur.match(TIE), f = cur.match(/^(\d+)/);
+    if (t) { pushUndo(); e.n[sel.str] = t[1]; }
+    else if (f) { pushUndo(); e.n[sel.str] = '(' + f[1] + ')'; }
+    else {                                              // 空欄なら前の音と同じフレットでタイを作る
+      const pp = prevPos(sel.m, sel.e); const pv = pp && (S.measures[pp[0]][pp[1]].n[sel.str].match(/\d+/) || [])[0];
+      if (!pv) return; pushUndo(); e.n[sel.str] = '(' + pv + ')';
+    }
+  }
+  else if (k === 'x') { pushUndo(); e.n[sel.str] = cur === 'x' ? '' : 'x'; }
   else {
     const m = cur.match(/^(\d+)(.*)$/); if (!m) return;
     pushUndo(); e.n[sel.str] = m[1] + (m[2] === k ? '' : k);
@@ -359,7 +375,7 @@ document.addEventListener('keydown', ev => {
   }
   let handled = true;
   if (/^[0-9]$/.test(k)) inputDigit(k);
-  else if (['h', 'p', 'b', '/', '\\', '~', 'x'].includes(k)) inputTech(k);
+  else if (['h', 'p', 'b', '/', '\\', '~', 'x', 't'].includes(k)) inputTech(k);
   else if ((k === 'Delete' || k === 'Backspace') && ev.shiftKey) deleteEvent();
   else if (k === 'Delete' || k === 'Backspace') clearString();
   else if (k === 'Insert') addEvent(false);
@@ -486,7 +502,9 @@ function playEvent(e, t, dur, active) {
     const tok = e.n[i], prev = active[i];
     if (!tok) { release(prev, t); active[i] = null; continue; }
     if (tok === 'x') { release(prev, t); active[i] = null; deadNote(t); continue; }
-    const m = tok.match(/^(\d+)(.*)$/); if (!m) continue;
+    const tie = tok.match(TIE);
+    if (tie && prev) { prev.suf = ''; continue; }           // タイ：弾き直さずにのばす
+    const m = tie ? [tok, tie[1], ''] : tok.match(/^(\d+)(.*)$/); if (!m) continue;
     const midi = S.tuning[i] + +m[1], suf = m[2];
     let n;
     if (prev && LEGATO.test(prev.suf)) {        // ハンマリング・プリング・スライド：弾き直さず音程だけ変える
